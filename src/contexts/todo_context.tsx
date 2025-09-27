@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import todoDataJson from "@/todo_data.json"; // Import as mock data (for demo)
 import type { ITodo } from "@/App";
+import {toast_err} from "@/lib/toast.ts";
 
 interface ITodoContext {
     todos: ITodo[];
@@ -15,7 +16,10 @@ const TodoContext = createContext<ITodoContext | undefined>(undefined);
 // eslint-disable-next-line react-refresh/only-export-components
 export const useTodo = () => {
     const context = useContext(TodoContext);
-    if (!context) throw new Error("useTodo must be used within TodoProvider");
+    if (!context) {
+        toast_err("todo must be used within TodoProvider");
+        throw new Error("todo must be used within TodoProvider");
+    }
     return context;
 };
 
