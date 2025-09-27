@@ -53,7 +53,7 @@ import {Select, SelectContent, SelectItem, SelectTrigger, SelectValue,} from "@/
 import {Table, TableBody, TableCell, TableHead, TableHeader, TableRow,} from "@/components/ui/table";
 import type {IconType} from "react-icons";
 import {cn} from "@/lib/utils.ts";
-import {inToCurrentFloat, intToCurrency, toDateThai, toDateTimeThai} from "@/lib/helper.ts";
+import {inToCurrentFloat, intToCurrency} from "@/lib/helper.ts";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 
 /** ---------- Config-driven header types ---------- */
@@ -461,10 +461,6 @@ function DataTable<T>({
                     } else if (cfg.type === "currency-decimal") {
                         const n = toNumber(raw);
                         display = inToCurrentFloat(n);
-                    } else if (cfg.type === "date") {
-                        display = toDateThai(raw);
-                    } else if (cfg.type === "datetime") {
-                        display = toDateTimeThai(raw);
                     } else if (cfg.type === "boolean") {
                         const b = toBoolean(raw);
                         display =
