@@ -9,11 +9,11 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { ITodo } from "@/App.tsx";
 import { useEffect, useState } from "react";
 import * as React from "react";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
 import {toast_err} from "@/lib/toast.ts";
+import type {ITodo} from "@/contexts/todo_context.tsx";
 
 export interface IDialog {
     title: string;
