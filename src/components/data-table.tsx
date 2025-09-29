@@ -55,6 +55,7 @@ import type {IconType} from "react-icons";
 import {cn} from "@/lib/utils.ts";
 import {inToCurrentFloat, intToCurrency} from "@/lib/helper.ts";
 import {Checkbox} from "@/components/ui/checkbox.tsx";
+import {Switch} from "@/components/ui/switch.tsx";
 
 /** ---------- Config-driven header types ---------- */
 
@@ -71,6 +72,7 @@ export interface ITableHeaderItem {
         | "currency-decimal"
         | "date"
         | "datetime"
+        | "switch"
     align: "left"
         | "center"
         | "right";
@@ -85,16 +87,17 @@ export interface ITableHeader {
     header: ITableHeaderItem[];
 }
 
-export interface ITableAction<T> {
+export interface ITableAction {
     label: string
-    type: "delete" | "menu"
     icon?: IconType
-    onClick: (data: T) => void
+    onClick: () => void
     variant?: "default" | "destructive";
+    disabled?: boolean;
+    visible?: boolean;
 }
 
 export interface ITablePagination {
-    pageIndex: number; // 0-based
+    pageIndex: number;
     totalPage: number;
     totalRowCount: number;
     pageSize: number;
@@ -105,7 +108,7 @@ export interface ITablePagination {
     onNextPage: () => void;
 }
 
-export type ITableActionItem<T> = ITableAction<T> | { type: "separator" };
+export type ITableActionItem = ITableAction | { type: "separator" };
 
 /** ---------- Utilities ---------- */
 
@@ -114,6 +117,12 @@ const alignToClass: Record<ITableHeaderItem["align"], string> = {
     center: "text-center",
     right: "text-right",
 };
+
+function isActionArray<T>(
+    actions: ((data: T) => ITableActionItem[]) | ITableActionItem[] | undefined
+): actions is ITableActionItem[] {
+    return Array.isArray(actions);
+}
 
 function toNumber(val: unknown): number {
     if (typeof val === "number") return val;
@@ -135,13 +144,13 @@ function toBoolean(val: unknown): boolean | null {
     return null;
 }
 
-function isSeparator<T>(
-    item: ITableActionItem<T>
+function isSeparator(
+    item: ITableActionItem
 ): item is { type: "separator" } {
     return (item as any).type === "separator";
 }
 
-function isAction<T>(item: ITableActionItem<T>): item is ITableAction<T> {
+function isAction(item: ITableActionItem): item is ITableAction {
     return (item as any).label !== undefined;
 }
 
@@ -163,22 +172,16 @@ function DragHandle({id}: { id: UniqueIdentifier }) {
 
 /** ---------- Main DataTable ---------- */
 
-function DataTable<T>({
-                                 data: initialData,
-                                 header,
-                                 actions = [],
-                                 pagination,
-                                 getRowId,                 // <-- NEW
-                             }: {
+export function DataTable<T>({data: initialData, header, menuActions, pagination, getRowId, onSwitchAction}: {
     data: T[];
     header: ITableHeader;
-    actions?: ITableActionItem<T>[];
+    menuActions?: ((data: T) => ITableActionItem[]) | ITableActionItem[];
     pagination?: ITablePagination;
-    getRowId?: (row: T) => UniqueIdentifier;  // <-- NEW
+    getRowId?: (row: T) => UniqueIdentifier;
+    onSwitchAction?: (row: T, value: boolean) => void;
 }) {
 
     const [sorting, setSorting] = React.useState<SortingState>([]);
-    // const [data, setData] = React.useState<T[]>(() => initialData);
     const [data, setData] = React.useState<T[]>(initialData);
     const [rowSelection, setRowSelection] = React.useState({});
     const [columnVisibility, setColumnVisibility] =
@@ -207,10 +210,10 @@ function DataTable<T>({
         [getRowId]
     );
     React.useEffect(() => {
-        setData(initialData); // Always sync when props change
+        setData(initialData);
     }, [initialData]);
 
-    // stable collator + comparator (silences exhaustive-deps)
+
     const collator = React.useMemo(
         () => new Intl.Collator(undefined, {numeric: true, sensitivity: "base"}),
         []
@@ -220,7 +223,7 @@ function DataTable<T>({
             const aEmpty = a == null || String(a).trim() === "";
             const bEmpty = b == null || String(b).trim() === "";
             if (aEmpty && bEmpty) return 0;
-            if (aEmpty) return 1; // empty/null last
+            if (aEmpty) return 1;
             if (bEmpty) return -1;
             return collator.compare(String(a), String(b));
         },
@@ -229,7 +232,7 @@ function DataTable<T>({
 
     const DraggableRow = ({row}: { row: Row<T> }) => {
         const {transform, transition, setNodeRef, isDragging} = useSortable({
-            id: rowIdFn(row.original),          // <-- was row.original.id
+            id: rowIdFn(row.original),
         });
 
         return (
@@ -252,7 +255,8 @@ function DataTable<T>({
 
     const columns = React.useMemo<ColumnDef<T>[]>(() => {
         const cols: ColumnDef<T>[] = [];
-        const hasActions = actions.filter(isAction).length > 0;
+        // const hasActions = actions.filter(isAction).length > 0;
+        const hasActions = isActionArray(menuActions) && menuActions.filter(isAction).length > 0;
 
         if (header.is_check || header.is_index) {
             cols.push({
@@ -283,19 +287,27 @@ function DataTable<T>({
                 ),
                 cell: ({row}) => {
                     const rowData = row.original as T;
-                    const actionable = actions.filter(isAction);
+                    const actionItems = typeof menuActions === "function" ? menuActions(rowData) : menuActions ?? [];
+                    // const actionable = actionItems.filter(isAction);
+                    // const actionable = actions.filter(isAction);
 
                     const renderActions = () => {
+                        const filteredActionItems = actionItems.filter(
+                            (a) => isSeparator(a) || (isAction(a) && (a.visible !== true))
+                        );
+                        const actionable = filteredActionItems.filter(isAction);
+
                         if (actionable.length === 1) {
                             const a = actionable[0];
-                            const danger = a.type === "delete" || a.variant === "destructive";
+                            const danger = a.variant === "destructive";
                             return (
                                 <Button
                                     variant="ghost"
                                     size="icon"
                                     title={a.label}
                                     aria-label={a.label}
-                                    onClick={() => a.onClick(rowData)}
+                                    onClick={a.onClick}
+                                    disabled={a.disabled === true}
                                     className={danger ? "text-red-600 dark:text-red-400 cursor-pointer" : "text-muted-foreground cursor-pointer"}
                                 >
                                     {a.icon ? <a.icon className="size-4"/> : <span className="text-xs">{a.label}</span>}
@@ -303,7 +315,7 @@ function DataTable<T>({
                             );
                         }
 
-                        if (actionable.length > 1 || actions.some(isSeparator)) {
+                        if (actionable.length > 1 || filteredActionItems.some(isSeparator)) {
                             return (
                                 <div className="flex justify-end w-full">
                                     <DropdownMenu>
@@ -318,14 +330,15 @@ function DataTable<T>({
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-auto ml-10">
-                                            {actions.map((a, i) => {
+                                            {filteredActionItems.map((a, i) => {
                                                 if (isSeparator(a)) return <DropdownMenuSeparator key={`sep-${i}`}/>;
                                                 if (isAction(a)) {
-                                                    const danger = a.type === "delete" || a.variant === "destructive";
+                                                    const danger = a.variant === "destructive";
                                                     return (
                                                         <DropdownMenuItem
                                                             key={`${a.label}-${i}`}
-                                                            onClick={() => a.onClick(rowData)}
+                                                            onClick={a.onClick}
+                                                            disabled={a.disabled === true}
                                                             className={
                                                                 danger
                                                                     ? "cursor-pointer text-red-600 dark:text-red-400 data-[highlighted]:bg-red-50 dark:data-[highlighted]:bg-red-950/40"
@@ -389,7 +402,7 @@ function DataTable<T>({
 
         }
 
-        // Data columns
+
         for (const cfg of header.header) {
             const alignClass = alignToClass[cfg.align];
             const widthStyle = typeof cfg.width === "number" ? {width: `${cfg.width}%`, minWidth: 0} : undefined;
@@ -402,7 +415,7 @@ function DataTable<T>({
                         ? (rowA: any, rowB: any, colId: string) => {
                             const a = toBoolean(rowA.getValue(colId));
                             const b = toBoolean(rowB.getValue(colId));
-                            const na = a === null ? 2 : a ? 1 : 0; // true > false > null
+                            const na = a === null ? 2 : a ? 1 : 0;
                             const nb = b === null ? 2 : b ? 1 : 0;
                             return na - nb;
                         }
@@ -411,16 +424,16 @@ function DataTable<T>({
             cols.push({
                 id: cfg.mapping,
                 accessorKey: cfg.mapping as any,
-                enableSorting: cfg.sortable,       // ← เปิด/ปิดด้วย cfg.sortable
-                sortingFn,                         //   (tanstack จะเมินถ้า enableSorting=false)
+                enableSorting: cfg.sortable,
+                sortingFn,
                 header: ({column}) => {
-                    const sorted = column.getIsSorted(); // 'asc' | 'desc' | false
+                    const sorted = column.getIsSorted();
                     const clickable = cfg.sortable;
 
                     return (
                         <div
-                            // className={`px-3 ${alignClass} w-full select-none ${clickable ? "cursor-pointer" : ""}`}
-                            // style={widthStyle}
+
+
                             className={`px-3 ${alignClass} w-full text-muted-foreground whitespace-normal break-words`}
                             style={widthStyle}
                             role={clickable ? "button" : undefined}
@@ -461,6 +474,27 @@ function DataTable<T>({
                     } else if (cfg.type === "currency-decimal") {
                         const n = toNumber(raw);
                         display = inToCurrentFloat(n);
+                    }  else if (cfg.type === "switch") {
+                        const value = !!raw;
+                        display = (
+                            <Switch
+                                checked={value}
+                                onCheckedChange={(val: boolean) => {
+                                    if (onSwitchAction) {
+                                        onSwitchAction(row.original, val as boolean);
+                                    } else {
+                                        // Optional: local update fallback (if you want local control)
+                                        setData(prev =>
+                                            prev.map(item =>
+                                                rowIdFn(item) === rowIdFn(row.original)
+                                                    ? {...item, [cfg.mapping]: val}
+                                                    : item
+                                            )
+                                        );
+                                    }
+                                }}
+                            />
+                        );
                     } else if (cfg.type === "boolean") {
                         const b = toBoolean(raw);
                         display =
@@ -473,7 +507,7 @@ function DataTable<T>({
                                     ) : (
                                         <IconPointFilled className="mr-1 fill-red-500 dark:fill-red-400"/>
                                     )}
-                                    {b?"Done" : "Not Done"}
+                                    {String(b)}
                                 </Badge>
                             );
                     } else if (cfg.type === "image") {
@@ -502,7 +536,7 @@ function DataTable<T>({
             } as ColumnDef<T>);
         }
         return cols;
-    }, [actions, header.is_check, header.is_index, header.is_drag, header.header, rowIdFn, pagination?.pageIndex, pagination?.pageSize, textCompare]);
+    }, [menuActions, header.is_check, header.is_index, header.is_drag, header.header, rowIdFn, pagination?.pageIndex, pagination?.pageSize, textCompare, onSwitchAction]);
 
     const isServerPagination = Boolean(pagination);
     const isClientPagination = header.is_pagination && !isServerPagination;
@@ -511,7 +545,7 @@ function DataTable<T>({
         data,
         columns,
         state: {sorting, columnVisibility, rowSelection, columnFilters},
-        getRowId: (row) => String(rowIdFn(row)),   // <-- was String(row.id)
+        getRowId: (row) => String(rowIdFn(row)),
         enableRowSelection: true,
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
@@ -584,7 +618,7 @@ function DataTable<T>({
                                 ) : (
                                     <TableRow>
                                         <TableCell colSpan={columns.length} className="h-24 text-center">
-                                            dataEmpty
+                                            dataEmpty.
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -598,8 +632,8 @@ function DataTable<T>({
                         <div>
                             {header.is_check && (
                                 <div className="text-muted-foreground hidden flex-1 text-sm lg:flex">
-                                    {table.getFilteredSelectedRowModel().rows.length}  of {" "}
-                                    {totalRowDisplay}  total
+                                    {table.getFilteredSelectedRowModel().rows.length} of{" "}
+                                    {totalRowDisplay} total
                                 </div>
                             )}
                         </div>
@@ -612,7 +646,7 @@ function DataTable<T>({
                                     </Label>
                                     <Select
                                         value={`${pagination?.pageSize}`}
-                                        onValueChange={(value:any) => pagination?.onPageSizeChange(Number(value))}
+                                        onValueChange={(value) => pagination?.onPageSizeChange(Number(value))}
                                     >
                                         <SelectTrigger size="sm" className="w-20" id="rows-per-page">
                                             <SelectValue placeholder={table.getState().pagination.pageSize}/>
@@ -686,5 +720,3 @@ function DataTable<T>({
         </div>
     );
 }
-
-export default DataTable

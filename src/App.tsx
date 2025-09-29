@@ -9,12 +9,17 @@ import { ConfirmDialog } from "@/components/confirm-dialog.tsx";
 import LoadingScreen from "@/components/loading-screen.tsx";
 import { toast_done, toast_err } from "@/lib/toast.ts";
 import { message_validate } from "@/lib/error_valid.ts";
-import DataTable, { type ITableActionItem, type ITableHeader, type ITableHeaderItem } from "@/components/data-table.tsx";
+import {
+    DataTable,
+    type ITableActionItem,
+    type ITableHeader,
+    type ITableHeaderItem
+} from "@/components/data-table.tsx";
 import { useTodoContext, type ITodo } from "@/contexts/todo_context.tsx"; // <<== IMPORT
 
 const simpleTableHeaderItem: ITableHeaderItem[] = [
     { title: "title", mapping: "title", width: 100, type: "text", align: "left", sortable: true },
-    { title: "completed", mapping: "completed", width: 100, type: "boolean", align: "center", sortable: true },
+    { title: "completed", mapping: "completed", width: 100, type: "switch", align: "center", sortable: true },
 ];
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -70,36 +75,26 @@ export default function App() {
     };
 
     // DataTable Actions
-    const menuActionsSimple: ITableActionItem<ITodo>[] = [
+    const menuActionsSimple = (data: ITodo): ITableActionItem[] =>  [
         {
             label: "edit",
             icon: IconEdit,
-            type: "menu",
-            onClick: (data: ITodo) => {
+            onClick: () => {
                 todoModeSet("edit");
                 todoFormSet(data);
                 todoSaveIsShowSet(true);
             },
         },
-        {
-            label: "Toggle",
-            icon: IconToggleRightFilled,
-            type: "menu",
-            onClick: (data: ITodo) => {
-                todoModeSet("confirm");
-                todoFormSet(data);
-                todoConfirmIsSet(true);
-            },
-        },
+        {type:"separator"},
         {
             label: "delete",
             icon: IconTrashFilled,
-            type: "delete",
-            onClick: (data) => {
+            onClick: () => {
                 todoModeSet("delete");
                 todoFormSet(data);
                 todoDeleteIsSet(true);
             },
+            variant:"destructive",
         },
     ];
 
@@ -130,7 +125,12 @@ export default function App() {
                         <DataTable<ITodo>
                             header={simpleTableHeader}
                             data={todos}
-                            actions={menuActionsSimple}
+                            menuActions={menuActionsSimple}
+                            onSwitchAction={(data: ITodo) => {
+                                todoModeSet("confirm");
+                                todoFormSet(data);
+                                todoConfirmIsSet(true);
+                            }}
                         />
                     )}
                 </CardContent>
