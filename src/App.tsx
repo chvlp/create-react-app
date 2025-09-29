@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { useEffect, useState } from "react";
 import { DialogSaveTodo, todoDefault } from "@/components/save-dialog.tsx";
-import { IconEdit, IconPlus, IconTrashFilled, IconToggleRightFilled } from "@tabler/icons-react";
+import { IconEdit, IconPlus, IconTrashFilled } from "@tabler/icons-react";
 import { DeleteDialog } from "@/components/delete-dialog.tsx";
 import { ConfirmDialog } from "@/components/confirm-dialog.tsx";
 import LoadingScreen from "@/components/loading-screen.tsx";
